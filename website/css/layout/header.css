@@ -1,0 +1,15 @@
+/* ===========================
+   Header
+=========================== */
+
+header{
+    background:#442323;
+    color:#fff;
+    text-align:center;
+    padding:22px 20px;
+}
+
+header h1{
+    font-size:34px;
+    font-weight:700;
+}

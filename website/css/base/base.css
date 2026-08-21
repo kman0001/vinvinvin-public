@@ -1,0 +1,22 @@
+/* ===========================
+   Reset & Base
+=========================== */
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html{
+    scroll-behavior:smooth;
+}
+
+body{
+    font-family:"Pretendard Variable",sans-serif;
+    background:#f5f5f5;
+    color:#222;
+    line-height:1.6;
+    word-break:keep-all;
+    overflow-wrap:break-word;
+}

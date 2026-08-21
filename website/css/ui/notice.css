@@ -1,0 +1,47 @@
+/* ===========================
+   Notice
+=========================== */
+
+#notice{
+    /* word-break: break-all; */
+    max-width:1200px;
+    margin:24px auto 12px;
+    padding:0 24px;
+}
+
+.notice-box{
+    background:#fff;
+    border-left:6px solid #7d0000;
+    border-radius:14px;
+    padding:20px 24px;
+    box-shadow:0 6px 18px rgba(0,0,0,.08);
+}
+
+.notice-title{
+    font-size:24px;
+    font-weight:700;
+    margin-bottom:14px;
+}
+
+.notice-list{
+    list-style:none;
+    padding:0;
+}
+
+.notice-list li{
+    margin:8px 0;
+    line-height:1.7;
+    color:#444;
+}
+
+.notice-warning{
+    margin-top:18px;
+    padding-top:16px;
+    border-top:1px solid #eee;
+}
+
+.notice-warning h3{
+    color:#7d0000;
+    font-size:18px;
+    margin-bottom:8px;
+}

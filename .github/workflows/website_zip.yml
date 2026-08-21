@@ -1,0 +1,101 @@
+name: Build Website ZIP
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Prepare website
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BUILD_DIR="$RUNNER_TEMP/website"
+          rm -rf "$BUILD_DIR"
+          mkdir -p "$BUILD_DIR"
+
+          # website 전체를 임시 배포 디렉터리로 복사
+          cp -a website/. "$BUILD_DIR/"
+
+          # ----------------------------------------
+          # images 구성
+          # ----------------------------------------
+
+          rm -rf "$BUILD_DIR/images"
+          mkdir -p "$BUILD_DIR/images"
+
+          # meta 폴더 전체 복사
+          cp -a website/images/meta "$BUILD_DIR/images/"
+
+          # 기본 이미지 2개만 복사
+          cp website/images/no-image.webp \
+             "$BUILD_DIR/images/no-image.webp"
+
+          cp website/images/no-image-snack.webp \
+             "$BUILD_DIR/images/no-image-snack.webp"
+
+          # ----------------------------------------
+          # constants.js의 Apps Script URL 교체
+          # ----------------------------------------
+
+          export BUILD_DIR
+
+          python3 <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path(os.environ["BUILD_DIR"]) / "js/config/constants.js"
+
+          text = path.read_text(encoding="utf-8")
+
+          replacement = (
+              "https://script.google.com/macros/s/"
+              "your-google-apps-script-id/exec"
+          )
+
+          pattern = (
+              r"https://script\.google\.com/macros/s/"
+              r"[A-Za-z0-9_-]+/exec"
+          )
+
+          text, count = re.subn(pattern, replacement, text)
+
+          if count == 0:
+              raise SystemExit(
+                  "Apps Script deployment URL was not found "
+                  "in constants.js"
+              )
+
+          path.write_text(text, encoding="utf-8")
+
+          print(f"Replaced {count} Apps Script deployment URL(s).")
+          PY
+
+      - name: Create website.zip
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "$RUNNER_TEMP/website"
+
+          zip -r "$GITHUB_WORKSPACE/website.zip" .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: website.zip
+          generate_release_notes: true

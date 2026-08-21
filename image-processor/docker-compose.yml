@@ -1,0 +1,42 @@
+version: '3'
+services:
+  vinvinvin-image-processor:
+    image: ghcr.io/kman0001/vinvinvin:latest
+    container_name: vinvinvin-image-processor
+    restart: unless-stopped
+    
+    environment:
+      TZ: Asia/Seoul
+
+    volumes:
+      - rembg-models:/tmp/u2net
+      - ./config:/app/config
+      - ./your/local/website/root/images:/app/images
+
+  vinvinvin-website:
+      image: php:8.2-alpine
+      container_name: vinvinvin-website
+      restart: unless-stopped
+      
+      working_dir: /var/www/html
+
+      volumes:
+        - ./your/local/website/root:/var/www/html
+
+      environment:
+        TZ: Asia/Seoul
+
+      command: >
+        sh -c "
+          apk add --no-cache tzdata &&
+          cp /usr/share/zoneinfo/Asia/Seoul /etc/localtime &&
+          echo 'Asia/Seoul' > /etc/timezone &&
+          echo 'date.timezone=Asia/Seoul' > /usr/local/etc/php/conf.d/timezone.ini &&
+          php -S 0.0.0.0:80 -t /var/www/html
+        "
+
+      ports:
+        - "7080:80"
+
+volumes:
+  rembg-models:

@@ -1,0 +1,502 @@
+name: Clean Old Cloudflare Pages Deployments
+
+on:
+  schedule:
+    # 매월 1일 00:00 UTC
+    # 한국 시간(KST)으로 매월 1일 오전 9시
+    - cron: '0 0 1 * *'
+
+  # GitHub Actions에서 수동 실행 가능
+  workflow_dispatch:
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Cloudflare Pages Deployment 정리
+        env:
+          # GitHub Repository Secrets
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PROJECT_NAME: ${{ secrets.CLOUDFLARE_PROJECT_NAME }}
+
+          # 환경별 보존할 Deployment 수
+          KEEP_DEPLOYMENTS: 5
+
+          # Cloudflare API 페이지당 조회 수
+          PER_PAGE: 20
+
+        run: |
+          set -euo pipefail
+
+          # ============================================================
+          # 기본 설정
+          # ============================================================
+
+          API_URL="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${CLOUDFLARE_PROJECT_NAME}/deployments"
+
+          PAGE=1
+          ALL_DEPLOYMENTS_FILE="$(mktemp)"
+          KEEP_IDS_FILE="$(mktemp)"
+
+          trap 'rm -f "${ALL_DEPLOYMENTS_FILE}" "${KEEP_IDS_FILE}"' EXIT
+
+          echo "=================================================="
+          echo "Cloudflare Pages Deployment 정리 시작"
+          echo "=================================================="
+          echo ""
+          echo "프로젝트: ${CLOUDFLARE_PROJECT_NAME}"
+          echo "페이지당 조회: ${PER_PAGE}"
+          echo "환경별 보존 개수: ${KEEP_DEPLOYMENTS}"
+          echo ""
+
+          # ============================================================
+          # 인증 정보 확인
+          # ============================================================
+
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ] \
+            || [ -z "${CLOUDFLARE_ACCOUNT_ID}" ] \
+            || [ -z "${CLOUDFLARE_PROJECT_NAME}" ]; then
+
+            echo "❌ Cloudflare 인증 정보가 없습니다."
+            exit 1
+          fi
+
+          echo "Cloudflare 인증 정보 확인: OK"
+          echo ""
+
+          # ============================================================
+          # 현재 Active Production 확인
+          #
+          # Project 정보의 canonical_deployment 값을 사용합니다.
+          # 이 값이 실제 현재 라이브 Production Deployment입니다.
+          # ============================================================
+
+          PROJECT_API_URL="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${CLOUDFLARE_PROJECT_NAME}"
+
+          echo "현재 Cloudflare Pages Project 정보 확인 중..."
+
+          PROJECT_RESPONSE=$(curl -sS \
+            -w '\n%{http_code}' \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "${PROJECT_API_URL}")
+
+          PROJECT_HTTP_STATUS=$(echo "${PROJECT_RESPONSE}" | tail -n 1)
+          PROJECT_BODY=$(echo "${PROJECT_RESPONSE}" | sed '$d')
+
+          echo "HTTP Status: ${PROJECT_HTTP_STATUS}"
+
+          if [ "${PROJECT_HTTP_STATUS}" != "200" ]; then
+            echo ""
+            echo "❌ Cloudflare Pages Project 조회에 실패했습니다."
+            echo ""
+            echo "${PROJECT_BODY}" | jq .
+            exit 1
+          fi
+
+          ACTIVE_PRODUCTION_ID=$(echo "${PROJECT_BODY}" \
+            | jq -r '.result.canonical_deployment.id // empty')
+
+          if [ -z "${ACTIVE_PRODUCTION_ID}" ]; then
+            echo ""
+            echo "❌ Active Production Deployment를 확인하지 못했습니다."
+            exit 1
+          fi
+
+          echo "Active Production 확인 완료"
+          echo ""
+
+          # ============================================================
+          # 모든 Deployment 조회
+          #
+          # 페이지네이션을 사용하여 전체 Deployment를 가져옵니다.
+          # ============================================================
+
+          while true; do
+
+            echo "Deployment 조회 중... page=${PAGE}"
+
+            RESPONSE=$(curl -sS \
+              -w '\n%{http_code}' \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              "${API_URL}?page=${PAGE}&per_page=${PER_PAGE}")
+
+            HTTP_STATUS=$(echo "${RESPONSE}" | tail -n 1)
+            BODY=$(echo "${RESPONSE}" | sed '$d')
+
+            echo "HTTP Status: ${HTTP_STATUS}"
+
+            if [ "${HTTP_STATUS}" != "200" ]; then
+              echo ""
+              echo "❌ Cloudflare API 요청에 실패했습니다."
+              echo ""
+              echo "${BODY}" | jq .
+              exit 1
+            fi
+
+            SUCCESS=$(echo "${BODY}" | jq -r '.success')
+
+            if [ "${SUCCESS}" != "true" ]; then
+              echo ""
+              echo "❌ Cloudflare API 요청에 실패했습니다."
+              echo ""
+              echo "${BODY}" | jq .
+              exit 1
+            fi
+
+            echo "${BODY}" \
+              | jq -c '.result[]' >> "${ALL_DEPLOYMENTS_FILE}"
+
+            TOTAL_PAGES=$(echo "${BODY}" \
+              | jq -r '.result_info.total_pages // 1')
+
+            echo "전체 페이지: ${TOTAL_PAGES}"
+
+            if [ "${PAGE}" -ge "${TOTAL_PAGES}" ]; then
+              break
+            fi
+
+            PAGE=$((PAGE + 1))
+
+          done
+
+          # ============================================================
+          # Deployment 정렬
+          #
+          # 최신 Deployment가 먼저 오도록 정렬합니다.
+          # ============================================================
+
+          DEPLOYMENTS=$(jq -s '
+            sort_by(.created_on)
+            | reverse
+          ' "${ALL_DEPLOYMENTS_FILE}")
+
+          TOTAL=$(echo "${DEPLOYMENTS}" | jq 'length')
+
+          # ============================================================
+          # Deployment 분류
+          # ============================================================
+
+          SKIPPED_COUNT=$(echo "${DEPLOYMENTS}" \
+            | jq '[.[] | select(.is_skipped == true)] | length')
+
+          PRODUCTION_COUNT=$(echo "${DEPLOYMENTS}" \
+            | jq '[.[] | select(.environment == "production")] | length')
+
+          PREVIEW_COUNT=$(echo "${DEPLOYMENTS}" \
+            | jq '[.[] | select(.environment == "preview")] | length')
+
+          echo ""
+          echo "전체 Deployment 수: ${TOTAL}"
+          echo "skipped Deployment : ${SKIPPED_COUNT}개"
+          echo "Production         : ${PRODUCTION_COUNT}개"
+          echo "Preview             : ${PREVIEW_COUNT}개"
+          echo ""
+
+          # ============================================================
+          # 현재 Active Production
+          # ============================================================
+
+          echo "=================================================="
+          echo "현재 Active Production"
+          echo "=================================================="
+          echo ""
+          echo "ID: ${ACTIVE_PRODUCTION_ID}"
+          echo ""
+
+          # ============================================================
+          # 보존할 Deployment ID 계산
+          #
+          # 1. skipped Deployment는 모두 삭제 대상
+          #
+          # 2. Production:
+          #    - skipped가 아닌 Deployment 중 최신 5개 보존
+          #    - Active Production은 항상 추가 보호
+          #
+          # 3. Preview:
+          #    - skipped가 아닌 Deployment 중 최신 5개 보존
+          #
+          # Active Production이 최신 5개 밖에 있어도 보호합니다.
+          # ============================================================
+
+          : > "${KEEP_IDS_FILE}"
+
+          # ------------------------------------------------------------
+          # Production 최신 5개
+          # ------------------------------------------------------------
+
+          echo "Production 보존: ${KEEP_DEPLOYMENTS}개"
+
+          echo "${DEPLOYMENTS}" \
+            | jq -r --argjson KEEP "${KEEP_DEPLOYMENTS}" '
+                [
+                  .[]
+                  | select(.environment == "production")
+                  | select(.is_skipped != true)
+                ]
+                | .[:$KEEP]
+                | .[].id
+              ' >> "${KEEP_IDS_FILE}"
+
+          # ------------------------------------------------------------
+          # Preview 최신 5개
+          # ------------------------------------------------------------
+
+          echo "Preview 보존: ${KEEP_DEPLOYMENTS}개"
+
+          echo "${DEPLOYMENTS}" \
+            | jq -r --argjson KEEP "${KEEP_DEPLOYMENTS}" '
+                [
+                  .[]
+                  | select(.environment == "preview")
+                  | select(.is_skipped != true)
+                ]
+                | .[:$KEEP]
+                | .[].id
+              ' >> "${KEEP_IDS_FILE}"
+
+          # ------------------------------------------------------------
+          # Active Production 추가 보호
+          #
+          # Active Production이 최신 5개에 포함되어 있지 않다면
+          # 별도로 보존합니다.
+          # ------------------------------------------------------------
+
+          if ! grep -Fxq "${ACTIVE_PRODUCTION_ID}" "${KEEP_IDS_FILE}"; then
+
+            echo "Active Production 추가 보호: 있음"
+
+            echo "${ACTIVE_PRODUCTION_ID}" >> "${KEEP_IDS_FILE}"
+
+          else
+
+            echo "Active Production 추가 보호: 없음"
+
+          fi
+
+          # 중복 제거
+          sort -u "${KEEP_IDS_FILE}" -o "${KEEP_IDS_FILE}"
+
+          KEEP_COUNT=$(wc -l < "${KEEP_IDS_FILE}" | tr -d ' ')
+
+          echo ""
+
+          # ============================================================
+          # 삭제 대상 계산
+          #
+          # skipped:
+          #   모두 삭제
+          #
+          # 일반 Deployment:
+          #   보존 목록에 없는 Deployment 삭제
+          #
+          # Active Production:
+          #   어떤 경우에도 삭제하지 않음
+          # ============================================================
+
+          DELETE_SKIPPED_COUNT=$(echo "${DEPLOYMENTS}" \
+            | jq --argfile KEEP "${KEEP_IDS_FILE}" '0' 2>/dev/null || true)
+
+          DELETE_PRODUCTION_COUNT=0
+          DELETE_PREVIEW_COUNT=0
+          DELETE_TOTAL_COUNT=0
+
+          while IFS=$'\t' read -r \
+            DEPLOYMENT_ID \
+            ENVIRONMENT \
+            IS_SKIPPED; do
+
+            # Active Production은 무조건 보호
+            if [ "${DEPLOYMENT_ID}" = "${ACTIVE_PRODUCTION_ID}" ]; then
+              continue
+            fi
+
+            # skipped Deployment는 모두 삭제
+            if [ "${IS_SKIPPED}" = "true" ]; then
+
+              DELETE_TOTAL_COUNT=$((DELETE_TOTAL_COUNT + 1))
+              continue
+
+            fi
+
+            # 보존 목록이면 삭제하지 않음
+            if grep -Fxq "${DEPLOYMENT_ID}" "${KEEP_IDS_FILE}"; then
+              continue
+            fi
+
+            DELETE_TOTAL_COUNT=$((DELETE_TOTAL_COUNT + 1))
+
+            if [ "${ENVIRONMENT}" = "production" ]; then
+              DELETE_PRODUCTION_COUNT=$((DELETE_PRODUCTION_COUNT + 1))
+
+            elif [ "${ENVIRONMENT}" = "preview" ]; then
+              DELETE_PREVIEW_COUNT=$((DELETE_PREVIEW_COUNT + 1))
+            fi
+
+          done < <(
+            echo "${DEPLOYMENTS}" \
+              | jq -r '
+                  .[]
+                  | [
+                      .id,
+                      .environment,
+                      (.is_skipped // false | tostring)
+                    ]
+                  | @tsv
+                '
+          )
+
+          # skipped 개수는 별도로 계산
+          DELETE_SKIPPED_COUNT="${SKIPPED_COUNT}"
+
+          # Active Production이 skipped인 비정상적인 경우를 대비
+          if echo "${DEPLOYMENTS}" \
+            | jq -e --arg ID "${ACTIVE_PRODUCTION_ID}" '
+                any(.[]; .id == $ID and .is_skipped == true)
+              ' >/dev/null; then
+
+            DELETE_SKIPPED_COUNT=$((DELETE_SKIPPED_COUNT - 1))
+
+          fi
+
+          echo ""
+          echo "=================================================="
+          echo "삭제 대상"
+          echo "=================================================="
+          echo ""
+          echo "skipped    : ${DELETE_SKIPPED_COUNT}개"
+          echo "Production : ${DELETE_PRODUCTION_COUNT}개"
+          echo "Preview    : ${DELETE_PREVIEW_COUNT}개"
+          echo ""
+          echo "삭제 작업을 진행합니다..."
+          echo ""
+
+          # ============================================================
+          # 실제 삭제
+          #
+          # 정상적인 경우에는 삭제 대상 상세 정보를 출력하지 않습니다.
+          # 삭제 실패가 발생했을 때만 상세 정보를 출력합니다.
+          # ============================================================
+
+          DELETE_SUCCESS_COUNT=0
+          FAILED_COUNT=0
+
+          while IFS=$'\t' read -r \
+            DEPLOYMENT_ID \
+            ENVIRONMENT \
+            IS_SKIPPED \
+            CREATED_ON \
+            DEPLOYMENT_URL; do
+
+            # ----------------------------------------------------------
+            # Active Production 보호
+            # ----------------------------------------------------------
+
+            if [ "${DEPLOYMENT_ID}" = "${ACTIVE_PRODUCTION_ID}" ]; then
+              continue
+            fi
+
+            # ----------------------------------------------------------
+            # skipped는 무조건 삭제
+            # ----------------------------------------------------------
+
+            if [ "${IS_SKIPPED}" = "true" ]; then
+              SHOULD_DELETE=true
+            else
+
+              # --------------------------------------------------------
+              # 일반 Deployment는 보존 목록 확인
+              # --------------------------------------------------------
+
+              if grep -Fxq "${DEPLOYMENT_ID}" "${KEEP_IDS_FILE}"; then
+                SHOULD_DELETE=false
+              else
+                SHOULD_DELETE=true
+              fi
+
+            fi
+
+            if [ "${SHOULD_DELETE}" != "true" ]; then
+              continue
+            fi
+
+            # ----------------------------------------------------------
+            # 삭제 요청
+            # ----------------------------------------------------------
+
+            DELETE_RESPONSE=$(curl -sS \
+              -w '\n%{http_code}' \
+              -X DELETE \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              "${API_URL}/${DEPLOYMENT_ID}?force=true")
+
+            DELETE_HTTP_STATUS=$(echo "${DELETE_RESPONSE}" | tail -n 1)
+            DELETE_BODY=$(echo "${DELETE_RESPONSE}" | sed '$d')
+
+            DELETE_SUCCESS=$(echo "${DELETE_BODY}" \
+              | jq -r '.success // false')
+
+            if [ "${DELETE_HTTP_STATUS}" != "200" ] \
+              || [ "${DELETE_SUCCESS}" != "true" ]; then
+
+              echo ""
+              echo "❌ Deployment 삭제 실패"
+              echo "ID        : ${DEPLOYMENT_ID}"
+              echo "환경      : ${ENVIRONMENT}"
+              echo "skipped   : ${IS_SKIPPED}"
+              echo "생성 시간 : ${CREATED_ON}"
+              echo "URL       : ${DEPLOYMENT_URL}"
+              echo "HTTP Status: ${DELETE_HTTP_STATUS}"
+              echo ""
+              echo "${DELETE_BODY}" | jq .
+              echo ""
+
+              FAILED_COUNT=$((FAILED_COUNT + 1))
+              continue
+            fi
+
+            DELETE_SUCCESS_COUNT=$((DELETE_SUCCESS_COUNT + 1))
+
+          done < <(
+            echo "${DEPLOYMENTS}" \
+              | jq -r '
+                  .[]
+                  | [
+                      .id,
+                      .environment,
+                      (.is_skipped // false | tostring),
+                      .created_on,
+                      .url
+                    ]
+                  | @tsv
+                '
+          )
+
+          # ============================================================
+          # 최종 결과
+          # ============================================================
+
+          echo ""
+          echo "=================================================="
+          echo "Cloudflare Pages Deployment 정리 완료"
+          echo "=================================================="
+          echo ""
+          echo "전체 Deployment : ${TOTAL}개"
+          echo "skipped          : ${SKIPPED_COUNT}개"
+          echo "Production       : ${PRODUCTION_COUNT}개"
+          echo "Preview           : ${PREVIEW_COUNT}개"
+          echo "보존              : ${KEEP_COUNT}개"
+          echo "삭제 성공        : ${DELETE_SUCCESS_COUNT}개"
+          echo "삭제 실패        : ${FAILED_COUNT}개"
+          echo ""
+
+          if [ "${FAILED_COUNT}" -gt 0 ]; then
+            echo "⚠️ 일부 Deployment 삭제에 실패했습니다."
+            exit 1
+          fi
+
+          echo "✅ 모든 정리 작업이 정상적으로 완료되었습니다."

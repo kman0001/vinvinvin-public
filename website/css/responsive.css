@@ -1,0 +1,65 @@
+/* ===========================
+   Responsive
+=========================== */
+
+@media (max-width:768px){
+
+    main{
+        padding:0 16px;
+    }
+
+    #category-nav{
+        padding:12px;
+        gap:8px;
+    }
+
+    #notice{
+        padding:0 16px;
+    }
+
+    .nav-button{
+        font-size:14px;
+        padding:8px 14px;
+    }
+
+    .card-layout{
+        flex-direction:column;
+        align-items:center;
+        text-align:center;
+    }
+
+    .wine-image{
+        width:180px;
+        height:260px;
+    }
+
+    .wine-meta{
+        justify-content:center;
+    }
+
+    .name{
+        font-size:30px;
+    }
+
+    .wine-profile{
+        justify-content:center;
+    }
+
+    .profile-tag{
+        font-size:14px;
+        padding:6px 12px;
+    }
+
+    .profile-bars .bar{
+        width:9px;
+        height:9px;
+    }
+
+    .web-desc{
+        font-size:16px;
+    }
+
+    .price{
+        font-size:36px;
+    }
+}
