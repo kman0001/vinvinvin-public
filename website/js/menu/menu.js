@@ -42,14 +42,32 @@ function groupByCategory(data) {
 
 function sortCategory(items) {
 
-    const result = new Array(items.length);
-    const unsorted = [];
+    const available = [];
+    const soldOut = [];
 
     // ===========================
-    // 1. 정렬값이 있는 메뉴를 슬롯에 배치
+    // 1. 판매 여부로 분리
     // ===========================
 
     items.forEach(item => {
+
+        if (isAvailable(item["판매 여부"])) {
+            available.push(item);
+        } else {
+            soldOut.push(item);
+        }
+
+    });
+
+    // ===========================
+    // 2. 판매중 메뉴 정렬
+    //    정렬값 → 가격
+    // ===========================
+
+    const result = new Array(available.length);
+    const unsorted = [];
+
+    available.forEach(item => {
 
         const sort = Number(item["정렬"]);
 
@@ -96,21 +114,12 @@ function sortCategory(items) {
     });
 
     // ===========================
-    // 2. 정렬값이 없는 메뉴 정렬
-    //    판매 여부 → 가격
+    // 3. 정렬값이 없는 판매중 메뉴
+    //    가격순
     // ===========================
 
     unsorted.sort((a, b) => {
 
-        const availableA = isAvailable(a["판매 여부"]);
-        const availableB = isAvailable(b["판매 여부"]);
-
-        // 판매중 먼저
-        if (availableA !== availableB) {
-            return availableA ? -1 : 1;
-        }
-
-        // 가격순
         const priceA = toPrice(a["가격"]);
         const priceB = toPrice(b["가격"]);
 
@@ -119,7 +128,7 @@ function sortCategory(items) {
     });
 
     // ===========================
-    // 3. 남은 슬롯을 순서대로 채움
+    // 4. 남은 슬롯을 순서대로 채움
     // ===========================
 
     let unsortedIndex = 0;
@@ -133,10 +142,28 @@ function sortCategory(items) {
     }
 
     // ===========================
-    // 4. 원본 배열에 반영
+    // 5. 품절 메뉴는 가격순
     // ===========================
 
-    items.splice(0, items.length, ...result);
+    soldOut.sort((a, b) => {
+
+        const priceA = toPrice(a["가격"]);
+        const priceB = toPrice(b["가격"]);
+
+        return priceA - priceB;
+
+    });
+
+    // ===========================
+    // 6. 판매중 → 품절 순으로 합치기
+    // ===========================
+
+    items.splice(
+        0,
+        items.length,
+        ...result,
+        ...soldOut
+    );
 
 }
 
