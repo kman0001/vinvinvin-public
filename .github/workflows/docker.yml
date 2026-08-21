@@ -1,19 +1,13 @@
 name: Build Image Processor
 
 on:
-  # 정식 이미지는 public 레포에서 자동 빌드
-  # push:
-  #   branches:
-  #     - main
-  #   paths:
-  #     - 'image-processor/**'
-
-  #push:
-  #  branches:
-  #    - refactor/image-cache-test
-  #  paths:
-  #    - 'image-processor/**'
-
+  push:
+    branches:
+      - main
+      - refactor/image-cache-test
+    paths:
+      - 'image-processor/**'
+      
   workflow_dispatch:
     inputs:
       no_cache:
