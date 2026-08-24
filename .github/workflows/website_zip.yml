@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (ex: v1.2.3)'
+        description: 'Release tag (예: v1.2.3)'
         required: true
         type: string
 
@@ -20,8 +20,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Determine tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid tag: $TAG"
+            echo "Expected format: v1.2.3"
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Using tag: $TAG"
+
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
 
       - name: Prepare website
         shell: bash
@@ -32,7 +55,6 @@ jobs:
           rm -rf "$BUILD_DIR"
           mkdir -p "$BUILD_DIR"
 
-          # website 전체를 임시 배포 디렉터리로 복사
           cp -a website/. "$BUILD_DIR/"
 
           # ----------------------------------------
@@ -42,10 +64,8 @@ jobs:
           rm -rf "$BUILD_DIR/images"
           mkdir -p "$BUILD_DIR/images"
 
-          # meta 폴더 전체 복사
           cp -a website/images/meta "$BUILD_DIR/images/"
 
-          # 기본 이미지 2개만 복사
           cp website/images/no-image.webp \
              "$BUILD_DIR/images/no-image.webp"
 
@@ -102,7 +122,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.tag.outputs.tag }}
           files: |
             website.zip
             image-processor/docker-compose.yml
           generate_release_notes: true
+          overwrite_files: true
