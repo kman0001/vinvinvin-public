@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (예: v1.2.3)'
+        description: 'Release tag (예: v0.1.0-dev)'
         required: true
         type: string
 
@@ -20,6 +20,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ----------------------------------------
+      # 사용할 태그 결정
+      # ----------------------------------------
       - name: Determine tag
         id: tag
         shell: bash
@@ -32,20 +35,27 @@ jobs:
             TAG="${GITHUB_REF_NAME}"
           fi
 
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          # 태그는 반드시 v로 시작해야 함
+          if [[ ! "$TAG" =~ ^v ]]; then
             echo "Invalid tag: $TAG"
-            echo "Expected format: v1.2.3"
+            echo "Tag must start with 'v'."
             exit 1
           fi
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Using tag: $TAG"
 
+      # ----------------------------------------
+      # 해당 태그의 소스 체크아웃
+      # ----------------------------------------
       - name: Checkout
         uses: actions/checkout@v5
         with:
           ref: ${{ steps.tag.outputs.tag }}
 
+      # ----------------------------------------
+      # website 준비
+      # ----------------------------------------
       - name: Prepare website
         shell: bash
         run: |
@@ -55,6 +65,7 @@ jobs:
           rm -rf "$BUILD_DIR"
           mkdir -p "$BUILD_DIR"
 
+          # website 전체를 임시 배포 디렉터리로 복사
           cp -a website/. "$BUILD_DIR/"
 
           # ----------------------------------------
@@ -64,8 +75,10 @@ jobs:
           rm -rf "$BUILD_DIR/images"
           mkdir -p "$BUILD_DIR/images"
 
+          # meta 폴더 전체 복사
           cp -a website/images/meta "$BUILD_DIR/images/"
 
+          # 기본 이미지 2개만 복사
           cp website/images/no-image.webp \
              "$BUILD_DIR/images/no-image.webp"
 
@@ -110,6 +123,9 @@ jobs:
           print(f"Replaced {count} Apps Script deployment URL(s).")
           PY
 
+      # ----------------------------------------
+      # website.zip 생성
+      # ----------------------------------------
       - name: Create website.zip
         shell: bash
         run: |
@@ -119,6 +135,9 @@ jobs:
 
           zip -r "$GITHUB_WORKSPACE/website.zip" .
 
+      # ----------------------------------------
+      # GitHub Release 생성 / 업데이트
+      # ----------------------------------------
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
