@@ -42,141 +42,214 @@ function groupByCategory(data) {
 
 function sortCategory(items) {
 
+    // ===========================
+    // 1. 판매중 / 품절 분리
+    // ===========================
+
     const available = [];
     const soldOut = [];
 
-    // ===========================
-    // 1. 판매 여부로 분리
-    // ===========================
+    items.forEach((item, originalIndex) => {
 
-    items.forEach(item => {
+        const entry = {
+            item,
+            originalIndex
+        };
 
         if (isAvailable(item["판매 여부"])) {
-            available.push(item);
+            available.push(entry);
         } else {
-            soldOut.push(item);
+            soldOut.push(entry);
         }
 
     });
 
     // ===========================
-    // 2. 판매중 메뉴 정렬
-    //    정렬값 → 가격
+    // 2. 정렬번호 유무에 따라 분리
     // ===========================
 
-    const result = new Array(available.length);
+    const positioned = [];
     const unsorted = [];
 
-    available.forEach(item => {
+    available.forEach(entry => {
 
-        const sort = Number(item["정렬"]);
+        const sort = Number(entry.item["정렬"]);
 
-        // 정렬값이 없으면 나중에 처리
-        if (!Number.isFinite(sort) || sort <= 0) {
-            unsorted.push(item);
-            return;
-        }
-
-        // 정렬값은 1부터 시작하는 위치
-        let index = sort - 1;
-
-        // ===========================
-        // 범위를 벗어난 정렬값
-        // → 마지막 빈 자리부터 탐색
-        // ===========================
-
-        if (index >= result.length) {
-            index = result.length - 1;
-        }
-
-        // ===========================
-        // 지정 위치가 차 있으면
-        // 다음 빈 자리 탐색
-        // ===========================
-
-        while (
-            index < result.length &&
-            result[index] !== undefined
+        if (
+            Number.isFinite(sort) &&
+            sort > 0
         ) {
-            index++;
-        }
-
-        // ===========================
-        // 뒤쪽에 빈 자리가 없으면
-        // 마지막 빈 자리 탐색
-        // ===========================
-
-        if (index >= result.length) {
-
-            index = result.length - 1;
-
-            while (
-                index >= 0 &&
-                result[index] !== undefined
-            ) {
-                index--;
-            }
-
-        }
-
-        if (index >= 0) {
-            result[index] = item;
+            positioned.push({
+                ...entry,
+                sort
+            });
+        } else {
+            unsorted.push(entry);
         }
 
     });
 
     // ===========================
-    // 3. 정렬값이 없는 판매중 메뉴
-    //    가격순
+    // 3. 정렬번호 순
+    // 동일 번호 → 시트 순서
+    // ===========================
+
+    positioned.sort((a, b) => {
+
+        if (a.sort !== b.sort) {
+            return a.sort - b.sort;
+        }
+
+        return a.originalIndex - b.originalIndex;
+
+    });
+
+    // ===========================
+    // 4. 정렬번호 없는 메뉴
+    // 가격순
+    // 동일 가격 → 시트 순서
     // ===========================
 
     unsorted.sort((a, b) => {
 
-        const priceA = toPrice(a["가격"]);
-        const priceB = toPrice(b["가격"]);
+        const priceA = toPrice(a.item["가격"]);
+        const priceB = toPrice(b.item["가격"]);
 
-        return priceA - priceB;
+        if (priceA !== priceB) {
+            return priceA - priceB;
+        }
+
+        return a.originalIndex - b.originalIndex;
 
     });
 
     // ===========================
-    // 4. 남은 슬롯 채우기
+    // 5. 판매중 메뉴 슬롯
+    // ===========================
+
+    const result = new Array(available.length);
+    const overflow = [];
+
+    // ===========================
+    // 6. 정렬번호 메뉴 배치
+    //
+    // 정렬번호 = 판매중 메뉴 기준 위치
+    //
+    // 범위를 벗어나면 overflow 처리
+    // ===========================
+
+    positioned.forEach(entry => {
+
+        const index = entry.sort - 1;
+
+        // 범위를 벗어나면 뒤쪽에 배치
+        if (index >= result.length) {
+            overflow.push(entry);
+            return;
+        }
+
+        // 해당 위치가 비어 있으면 배치
+        if (result[index] === undefined) {
+            result[index] = entry.item;
+            return;
+        }
+
+        // 같은 정렬번호로 충돌하면
+        // 다음 빈 슬롯을 찾음
+        let nextIndex = index + 1;
+
+        while (
+            nextIndex < result.length &&
+            result[nextIndex] !== undefined
+        ) {
+            nextIndex++;
+        }
+
+        if (nextIndex < result.length) {
+            result[nextIndex] = entry.item;
+        } else {
+            overflow.push(entry);
+        }
+
+    });
+
+    // ===========================
+    // 7. 정렬번호 없는 메뉴
+    // 남은 슬롯을 가격순으로 채움
     // ===========================
 
     let unsortedIndex = 0;
 
     for (let i = 0; i < result.length; i++) {
 
-        if (result[i] === undefined) {
-            result[i] = unsorted[unsortedIndex++];
+        if (
+            result[i] === undefined &&
+            unsortedIndex < unsorted.length
+        ) {
+            result[i] = unsorted[unsortedIndex++].item;
         }
 
     }
 
     // ===========================
-    // 5. 품절 메뉴 가격순 정렬
+    // 8. 정렬번호 없는 메뉴가 남으면
+    // overflow 앞에 추가
     // ===========================
 
-    soldOut.sort((a, b) => {
+    while (unsortedIndex < unsorted.length) {
 
-        const priceA = toPrice(a["가격"]);
-        const priceB = toPrice(b["가격"]);
+        overflow.push(
+            unsorted[unsortedIndex++]
+        );
 
-        return priceA - priceB;
+    }
+
+    // ===========================
+    // 9. 범위를 초과한 정렬번호
+    //
+    // 정렬번호 순으로 뒤쪽에 추가
+    // ===========================
+
+    overflow.forEach(entry => {
+
+        result.push(entry.item);
 
     });
 
     // ===========================
-    // 6. 판매중 → 품절 순으로 합치기
+    // 10. 품절 메뉴
+    //
+    // 가격순
+    // 동일 가격 → 시트 순서
+    //
+    // 정렬번호와 관계없이 항상 마지막
+    // ===========================
+
+    soldOut.sort((a, b) => {
+
+        const priceA = toPrice(a.item["가격"]);
+        const priceB = toPrice(b.item["가격"]);
+
+        if (priceA !== priceB) {
+            return priceA - priceB;
+        }
+
+        return a.originalIndex - b.originalIndex;
+
+    });
+
+    // ===========================
+    // 11. 최종
+    //
+    // 판매중 → 품절
     // ===========================
 
     items.splice(
         0,
         items.length,
-        ...result,
-        ...soldOut
+        ...result.filter(item => item !== undefined),
+        ...soldOut.map(entry => entry.item)
     );
-
 }
 
 // ===========================
