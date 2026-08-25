@@ -28,6 +28,18 @@ const IMAGE_ADDRESS_COLUMN = "사진";
 const PRICE_HEADER_SEARCH_ROWS = 10;   // 단가표 헤더 검색 최대 행 수
 
 // ===========================
+// 공백 데이터 판정
+// ===========================
+
+function hasVisibleText(value) {
+
+  return String(value || "")
+    .replace(/[\s\u00A0\u2000-\u200D\u202F\u205F\u3000\u3164\uFEFF]/g, "")
+    !== "";
+
+}
+
+// ===========================
 // 시트 데이터
 // ===========================
 
@@ -67,9 +79,9 @@ function getSheetData(spreadsheet, sheetName) {
       }
 
       // '항목'이 비어 있는 행은 제외
-      return String(
+      return hasVisibleText(
         row[itemIndex]
-      ).trim() !== "";
+      );
 
     })
     .map(row => {
@@ -512,12 +524,10 @@ function updateMenuImages(payload) {
       dataValues[index][nameOffset];
 
     if (
-      String(category || "").trim() === "" &&
-      String(name || "").trim() === ""
+      !hasVisibleText(category) &&
+      !hasVisibleText(name)
     ) {
-
       continue;
-
     }
 
     const key =
@@ -560,18 +570,13 @@ function updateMenuImages(payload) {
           item.destination || ""
         ).trim();
 
-
       if (
         rowIndex === undefined ||
-        !destination
+        !hasVisibleText(destination)
       ) {
-
         skipped += 1;
-
         return;
-
       }
-
 
       const currentValue =
         String(
