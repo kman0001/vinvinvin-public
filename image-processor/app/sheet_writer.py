@@ -17,14 +17,15 @@ from app.source import get_source_url
 # Apps Script updateStatus retry settings
 # ============================================================
 
-STATUS_MAX_RETRIES = 5
+STATUS_MAX_RETRIES = 7
 
 STATUS_RETRY_DELAYS = (
-    2,
-    4,
-    8,
-    12,
+    10,
     20,
+    30,
+    60,
+    120,
+    300,
 )
 
 STATUS_RETRYABLE_HTTP_CODES = {
