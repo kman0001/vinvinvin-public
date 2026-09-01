@@ -56,7 +56,7 @@ function sortCategory(items) {
             originalIndex
         };
 
-        if (isAvailable(item["판매 여부"])) {
+        if (isAvailable(item["품절 여부"])) {
             available.push(entry);
         } else {
             soldOut.push(entry);

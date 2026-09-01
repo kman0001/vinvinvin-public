@@ -88,7 +88,7 @@ export function createMenuCard(item, category) {
     const abv = info[2] || "";
     const extra = info[3] || "";
 
-    const available = isAvailable(item["판매 여부"]);
+    const available = isAvailable(item["품절 여부"]);
     const recommended = isRecommended(item["추천"]);
 
     const price = toPrice(item["가격"]);
