@@ -120,6 +120,15 @@ main{
     color:#555;
 }
 
+.extra-icon {
+    width: 1.35em;
+    height: 1.35em;
+    display: inline-block;
+    flex: 0 0 auto;
+    object-fit: contain;
+    margin-right: 4px;
+}
+
 /* ===========================
    Description
 =========================== */

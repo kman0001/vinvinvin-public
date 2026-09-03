@@ -74,9 +74,13 @@ jobs:
 
           rm -rf "$BUILD_DIR/images"
           mkdir -p "$BUILD_DIR/images"
+          mkdir -p "$BUILD_DIR/images/icons"
 
           # meta 폴더 전체 복사
           cp -a website/images/meta "$BUILD_DIR/images/"
+
+          # icons 폴더 전체 복사
+          cp -a website/images/icons/. "$BUILD_DIR/images/icons/"
 
           # 기본 이미지 2개만 복사
           cp website/images/no-image.webp \

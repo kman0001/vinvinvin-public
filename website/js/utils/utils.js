@@ -81,9 +81,8 @@ export function getExtraIcon(value) {
     }
 
     if (/^\d+\s*IBU$/i.test(text)) {
-        return "💥";
+        return `<img src="images/icons/ibu.svg" alt="IBU" class="extra-icon">`;
     }
 
     return "📌";
 }
-
