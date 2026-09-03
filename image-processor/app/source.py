@@ -26,6 +26,58 @@ VISIBLE_TEXT_RE = re.compile(
 def has_visible_text(value: object) -> bool:
     return VISIBLE_TEXT_RE.sub("", str(value or "")) != ""
 
+def build_managed_image_rules(
+    config: dict,
+) -> tuple[bool, set[str]]:
+    filename_managed = False
+    managed_base_urls = set()
+
+    storage_config = config.get("storage", {})
+
+    for storage in storage_config.values():
+        if not isinstance(storage, dict):
+            continue
+
+        if storage.get("enabled") is not True:
+            continue
+
+        output_mode = str(
+            storage.get("output_mode", "")
+        ).strip()
+
+        if output_mode == "filename":
+            filename_managed = True
+
+        elif output_mode == "url":
+            base_url = str(
+                storage.get("base_url", "")
+            ).strip().rstrip("/")
+
+            if base_url:
+                managed_base_urls.add(base_url)
+
+    return filename_managed, managed_base_urls
+
+def should_clear_image(
+    photo: str,
+    filename_managed: bool,
+    managed_base_urls: set[str],
+) -> bool:
+    photo = str(photo or "").strip()
+
+    if not photo:
+        return False
+
+    parsed = urlparse(photo)
+
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return any(
+            photo == base_url
+            or photo.startswith(base_url + "/")
+            for base_url in managed_base_urls
+        )
+
+    return filename_managed
 
 class SourceError(RuntimeError):
     """Raised when the website source cannot be used."""
@@ -134,6 +186,7 @@ def get_source_url(config: dict) -> str:
 def parse_menu(
     payload: object,
     image_column: str,
+    config: dict,
 ) -> tuple[list[MenuImage], list[dict]]:
     if (
         not isinstance(payload, dict)
@@ -143,6 +196,10 @@ def parse_menu(
             "Apps Script JSON must contain a menu array."
         )
 
+    filename_managed, managed_base_urls = (
+        build_managed_image_rules(config)
+    )
+    
     items = []
     clear_rows = []
 
@@ -167,18 +224,30 @@ def parse_menu(
         photo_visible = has_visible_text(photo)
 
         if not category_visible and name_visible and photo_visible:
-            clear_rows.append(
-                {
-                    "category": "",
-                    "name": name,
-                }
-            )
+            if should_clear_image(
+                photo,
+                filename_managed,
+                managed_base_urls,
+            ):
+                clear_rows.append(
+                    {
+                        "category": "",
+                        "name": name,
+                    }
+                )
 
-            print(
-                f"[INFO] menu[{index}] has no 항목; "
-                f"clearing {image_column} for {name}.",
-                flush=True,
-            )
+                print(
+                    f"[INFO] menu[{index}] has no 항목; "
+                    f"clearing {image_column} for {name}.",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"[INFO] menu[{index}] has no 항목; "
+                    f"preserving external URL for {name}.",
+                    flush=True,
+                )
+
             continue
 
         if not (category_visible and name_visible and photo_visible):
@@ -267,6 +336,7 @@ def load_menu(config: dict) -> tuple[list[MenuImage], list[dict]]:
             return parse_menu(
                 payload,
                 image_column,
+                config,
             )
 
         except HTTPError as exc:
