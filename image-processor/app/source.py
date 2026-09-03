@@ -3,7 +3,7 @@ import re
 import time
 from dataclasses import dataclass
 from urllib.error import HTTPError
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlencode, parse_qsl, urlunparse
 from urllib.request import Request, urlopen
 
 
@@ -17,6 +17,14 @@ API_EXPORT_RE = re.compile(
 # Apps Script JSON 요청 재시도 설정
 MAX_APPS_SCRIPT_RETRIES = 3
 APPS_SCRIPT_RETRY_DELAY_SECONDS = 2
+
+VISIBLE_TEXT_RE = re.compile(
+    r"[\s\u00A0\u2000-\u200D\u202F\u205F\u3000\u3164\uFEFF]"
+)
+
+
+def has_visible_text(value: object) -> bool:
+    return VISIBLE_TEXT_RE.sub("", str(value or "")) != ""
 
 
 class SourceError(RuntimeError):
@@ -126,7 +134,7 @@ def get_source_url(config: dict) -> str:
 def parse_menu(
     payload: object,
     image_column: str,
-) -> list[MenuImage]:
+) -> tuple[list[MenuImage], list[dict]]:
     if (
         not isinstance(payload, dict)
         or not isinstance(payload.get("menu"), list)
@@ -136,6 +144,7 @@ def parse_menu(
         )
 
     items = []
+    clear_rows = []
 
     for index, row in enumerate(payload["menu"]):
         if not isinstance(row, dict):
@@ -153,7 +162,26 @@ def parse_menu(
             row.get(image_column, "")
         ).strip()
 
-        if not (category and name and photo):
+        category_visible = has_visible_text(category)
+        name_visible = has_visible_text(name)
+        photo_visible = has_visible_text(photo)
+
+        if not category_visible and name_visible and photo_visible:
+            clear_rows.append(
+                {
+                    "category": "",
+                    "name": name,
+                }
+            )
+
+            print(
+                f"[INFO] menu[{index}] has no 항목; "
+                f"clearing {image_column} for {name}.",
+                flush=True,
+            )
+            continue
+
+        if not (category_visible and name_visible and photo_visible):
             print(
                 f"[WARN] menu[{index}] lacks 항목, 이름, or "
                 f"{image_column}; skipped.",
@@ -169,10 +197,20 @@ def parse_menu(
             )
         )
 
-    return items
+    return items, clear_rows
 
 
-def load_menu(config: dict) -> list[MenuImage]:
+def build_image_processor_url(url: str, lang: str = "ko") -> str:
+    parts = urlparse(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query["action"] = "imageProcessor"
+    query["lang"] = lang
+    return urlunparse(
+        parts._replace(query=urlencode(query))
+    )
+
+
+def load_menu(config: dict) -> tuple[list[MenuImage], list[dict]]:
     source_config = config.get("source", {})
 
     sheet_config = config.get(
@@ -192,7 +230,9 @@ def load_menu(config: dict) -> list[MenuImage]:
             "sheet_update.image_column is required."
         )
 
-    url = get_source_url(config)
+    url = build_image_processor_url(
+        get_source_url(config)
+    )
 
     timeout = source_config.get(
         "timeout_seconds",

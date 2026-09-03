@@ -193,22 +193,20 @@ function ensureColumn(
 
 }
 
-function buildMenuRowKey(
-  category,
-  name
-) {
+function normalizeMenuKeyValue(value) {
+  const text = String(value || "").trim();
 
+  return hasVisibleText(text)
+    ? text
+    : "";
+}
+
+
+function buildMenuRowKey(category, name) {
   return [
-    String(
-      category || ""
-    ).trim(),
-
-    String(
-      name || ""
-    ).trim()
-
+    normalizeMenuKeyValue(category),
+    normalizeMenuKeyValue(name)
   ].join("\u0001");
-
 }
 
 // ===========================
@@ -306,6 +304,11 @@ function updateMenuImages(payload) {
   const rows =
     Array.isArray(payload.rows)
       ? payload.rows
+      : [];
+
+  const clearRows =
+    Array.isArray(payload.clearRows)
+      ? payload.clearRows
       : [];
 
 
@@ -598,6 +601,48 @@ function updateMenuImages(payload) {
 
       dataValues[rowIndex][imageOffset] =
         destination;
+
+      changedRows.add(
+        rowIndex
+      );
+
+      updated += 1;
+
+    }
+  );
+
+
+  clearRows.forEach(
+    item => {
+
+      const key =
+        buildMenuRowKey(
+          item.category,
+          item.name
+        );
+
+      const rowIndex =
+        rowByKey[key];
+
+      if (
+        rowIndex === undefined
+      ) {
+        skipped += 1;
+        return;
+      }
+
+      const currentValue =
+        String(
+          dataValues[rowIndex][imageOffset]
+        ).trim();
+
+      if (!hasVisibleText(currentValue)) {
+        skipped += 1;
+        return;
+      }
+
+      dataValues[rowIndex][imageOffset] =
+        "";
 
       changedRows.add(
         rowIndex
@@ -1202,6 +1247,198 @@ function setCachedResponse(
 }
 
 // ===========================
+// 이미지 프로세서용 빈 항목 행
+// ===========================
+
+function getImageProcessorBlankPriceRows(
+  spreadsheet
+) {
+
+  const sheet =
+    spreadsheet.getSheetByName(
+      SHEETS.PRICE
+    );
+
+  if (!sheet) {
+    return [];
+  }
+
+  const lastRow =
+    sheet.getLastRow();
+
+  const lastColumn =
+    sheet.getLastColumn();
+
+  if (
+    lastRow === 0 ||
+    lastColumn === 0
+  ) {
+    return [];
+  }
+
+  const headerSearchRowCount =
+    Math.min(
+      PRICE_HEADER_SEARCH_ROWS,
+      lastRow
+    );
+
+  const headerSearchValues =
+    sheet
+      .getRange(
+        1,
+        1,
+        headerSearchRowCount,
+        lastColumn
+      )
+      .getValues();
+
+  const headerRowIndex =
+    findPriceHeaderRow(
+      headerSearchValues
+    );
+
+  if (headerRowIndex === -1) {
+    return [];
+  }
+
+  const headers =
+    headerSearchValues[
+      headerRowIndex
+    ]
+      .map(header =>
+        String(header)
+          .replace(/\t/g, "")
+          .trim()
+      );
+
+  const categoryIndex =
+    headers.indexOf("항목");
+
+  const nameIndex =
+    headers.indexOf("이름");
+
+  const imageIndex =
+    headers.indexOf(IMAGE_ADDRESS_COLUMN);
+
+  if (
+    categoryIndex === -1 ||
+    nameIndex === -1 ||
+    imageIndex === -1
+  ) {
+    return [];
+  }
+
+  const dataStartRow =
+    headerRowIndex + 2;
+
+  const dataRowCount =
+    lastRow -
+    headerRowIndex -
+    1;
+
+  if (dataRowCount <= 0) {
+    return [];
+  }
+
+  const dataStartColumn =
+    Math.min(
+      categoryIndex,
+      nameIndex,
+      imageIndex
+    );
+
+  const dataEndColumn =
+    Math.max(
+      categoryIndex,
+      nameIndex,
+      imageIndex
+    );
+
+  const dataValues =
+    sheet
+      .getRange(
+        dataStartRow,
+        dataStartColumn + 1,
+        dataRowCount,
+        dataEndColumn - dataStartColumn + 1
+      )
+      .getValues();
+
+  const categoryOffset =
+    categoryIndex - dataStartColumn;
+
+  const nameOffset =
+    nameIndex - dataStartColumn;
+
+  const imageOffset =
+    imageIndex - dataStartColumn;
+
+  const rows = [];
+
+  dataValues.forEach(
+    row => {
+
+      if (
+        hasVisibleText(
+          row[categoryOffset]
+        ) ||
+        !hasVisibleText(
+          row[nameOffset]
+        ) ||
+        !hasVisibleText(
+          row[imageOffset]
+        )
+      ) {
+        return;
+      }
+
+      rows.push({
+        항목: row[categoryOffset],
+        이름: row[nameOffset],
+        [IMAGE_ADDRESS_COLUMN]: row[imageOffset]
+      });
+
+    }
+  );
+
+  return rows;
+
+}
+
+function getImageProcessorResponseJson(
+  lang
+) {
+
+  const spreadsheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet();
+
+  const menu =
+    getSheetData(
+      spreadsheet,
+      SHEETS.MENU
+    );
+
+  const blankPriceRows =
+    getImageProcessorBlankPriceRows(
+      spreadsheet
+    );
+
+  return JSON.stringify({
+
+    lang:
+      lang,
+
+    menu:
+      menu.concat(
+        blankPriceRows
+      ),
+
+  });
+
+}
+
+// ===========================
 // 응답 처리
 // ===========================
 
@@ -1341,6 +1578,32 @@ function doGet(e) {
       e.parameter &&
       e.parameter.action
     ) || "";
+
+  if (
+    action ===
+    "imageProcessor"
+  ) {
+
+    const lang =
+      (
+        e &&
+        e.parameter &&
+        e.parameter.lang
+      )
+      ||
+      LANG.KO;
+
+    return ContentService
+      .createTextOutput(
+        getImageProcessorResponseJson(
+          lang
+        )
+      )
+      .setMimeType(
+        ContentService.MimeType.JSON
+      );
+
+  }
 
   if (
     action ===

@@ -349,7 +349,7 @@ def process_images(
 
     try:
 
-        menu = load_menu(
+        menu, clear_rows = load_menu(
             config
         )
 
@@ -886,7 +886,8 @@ def process_images(
     sheet_update_success = (
         write_sheet_destinations(
             config,
-            sheet_updates
+            sheet_updates,
+            clear_rows
         )
     )
 

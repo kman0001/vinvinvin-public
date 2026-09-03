@@ -541,6 +541,7 @@ def _cleanup_image_update_properties(
 def write_sheet_destinations(
     config,
     rows,
+    clear_rows=None,
 ):
     """
     Google Sheet 이미지 열을 업데이트한다.
@@ -562,6 +563,8 @@ def write_sheet_destinations(
     cache.json을 저장해야 한다.
     """
 
+    clear_rows = clear_rows or []
+
     sheet_config = config.get(
         "sheet_update",
         {}
@@ -579,7 +582,7 @@ def write_sheet_destinations(
 
         return True
 
-    if not rows:
+    if not rows and not clear_rows:
 
         print(
             "[INFO] No sheet image destinations "
@@ -627,6 +630,8 @@ def write_sheet_destinations(
         "imageColumn": image_column,
 
         "rows": rows,
+
+        "clearRows": clear_rows,
     }
 
     timeout = sheet_config.get(
