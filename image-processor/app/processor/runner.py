@@ -455,13 +455,13 @@ def process_images(
             or not item.name
             or not item.photo
         ):
-
             print(
-                f"[WARN] menu[{index}] lacks "
-                "항목, 이름, or 사진; skipped.",
+                f"[INFO] "
+                f"{item.category or '(항목 없음)'} / "
+                f"{item.name or '(이름 없음)'} / "
+                f"{item.photo or '(사진 없음)'}; skipped.",
                 flush=True
             )
-
             continue
 
         # ====================================================
