@@ -235,8 +235,10 @@ def parse_menu(
 
         if not (category_visible and name_visible and photo_visible):
             print(
-                f"[WARN] menu[{index}] lacks 항목, 이름, or "
-                f"{image_column}; skipped.",
+                f"[INFO] "
+                f"{category or '(항목 없음)'} / "
+                f"{name or '(이름 없음)'} / "
+                f"{photo or '(사진 없음)'}; skipped.",
                 flush=True,
             )
             continue
