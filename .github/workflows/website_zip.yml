@@ -83,10 +83,10 @@ jobs:
           cp -a website/images/icons/. "$BUILD_DIR/images/icons/"
 
           # 기본 이미지 2개만 복사
-          cp website/images/no-image.webp \
+          cp website/images/meta/no-image.webp \
              "$BUILD_DIR/images/no-image.webp"
 
-          cp website/images/no-image-snack.webp \
+          cp website/images/meta/no-image-snack.webp \
              "$BUILD_DIR/images/no-image-snack.webp"
 
           # ----------------------------------------

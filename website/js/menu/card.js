@@ -1,6 +1,8 @@
 import { getFlag, getTypeIcon } from "./icons.js";
 import { renderWineProfile } from "./profile.js";
 
+import { NO_IMAGE, NO_IMAGE_SNACK } from "../config/constants.js";
+
 import {
     splitText,
     getImageSrc,
@@ -78,7 +80,10 @@ export function createMenuCard(item, category) {
     const card = document.createElement("div");
     card.className = "card";
 
-    const imageSrc = getImageSrc(item["사진"]);
+    const imageSrc = getImageSrc(
+        item["사진"],
+        category === "안주" ? NO_IMAGE_SNACK : NO_IMAGE
+    );
 
     const info = splitText(item["주요 정보 1"]);
     const profile = splitText(item["주요 정보 2"]);
@@ -103,7 +108,7 @@ export function createMenuCard(item, category) {
                 src="${imageSrc}"
                 data-image="${imageSrc}"
                 alt="${item["이름"]}"
-                onerror="this.src='images/no-image.webp'"
+                onerror="this.src='${NO_IMAGE}'"
             >
 
             <div class="wine-info">

@@ -17,18 +17,16 @@ export function splitText(value, separator = "/") {
 // Image
 // ===========================
 
-export function getImageSrc(image) {
-
+export function getImageSrc(image, fallback = NO_IMAGE) {
     const file = String(image || "").trim();
 
     if (!file) {
-        return NO_IMAGE;
+        return fallback;
     }
 
     return /^(https?:)?\/\//i.test(file)
         ? file
         : `images/${file}`;
-
 }
 
 // ===========================

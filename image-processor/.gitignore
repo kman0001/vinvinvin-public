@@ -7,8 +7,4 @@ docker-compose.override.yml
 
 # Generated website images
 website/images/*
-!website/images/meta/
-!website/images/meta/favicon.ico
-!website/images/meta/og-preview.png
-!website/images/no-image.webp
-!website/images/no-image-snack.webp
+!website/images/*/
