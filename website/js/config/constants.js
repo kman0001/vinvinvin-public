@@ -25,4 +25,5 @@ export const CATEGORY_ORDER = [
 // Default Images
 // ===========================
 
-export const NO_IMAGE = "images/no-image.webp";
+export const NO_IMAGE = "images/meta/no-image.webp";
+export const NO_IMAGE_SNACK = "images/meta/no-image-snack.webp";
