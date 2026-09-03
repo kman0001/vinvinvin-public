@@ -70,8 +70,7 @@ export function formatPrice(value) {
 // ===========================
 
 export function getExtraIcon(value) {
-
-    const text = String(value || "").trim();
+    const text = String(value ?? "").trim();
 
     if (/^\d{4}$/.test(text) || text.toUpperCase() === "NV") {
         return "📅";
@@ -81,6 +80,10 @@ export function getExtraIcon(value) {
         return "🥂";
     }
 
-    return "📌";
+    if (/^\d+\s*IBU$/i.test(text)) {
+        return "💥";
+    }
 
+    return "📌";
 }
+
