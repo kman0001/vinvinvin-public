@@ -187,7 +187,7 @@ def parse_menu(
     payload: object,
     image_column: str,
     config: dict,
-) -> tuple[list[MenuImage], list[dict]]:
+) -> tuple[list[MenuImage], list[str]]:
     if (
         not isinstance(payload, dict)
         or not isinstance(payload.get("menu"), list)
@@ -201,7 +201,7 @@ def parse_menu(
     )
     
     items = []
-    clear_rows = []
+    preserved_names = []
 
     for index, row in enumerate(payload["menu"]):
         if not isinstance(row, dict):
@@ -223,30 +223,13 @@ def parse_menu(
         name_visible = has_visible_text(name)
         photo_visible = has_visible_text(photo)
 
-        if not category_visible and name_visible and photo_visible:
-            if should_clear_image(
-                photo,
-                filename_managed,
-                managed_base_urls,
-            ):
-                clear_rows.append(
-                    {
-                        "category": "",
-                        "name": name,
-                    }
-                )
-
-                print(
-                    f"[INFO] menu[{index}] has no 항목; "
-                    f"clearing {image_column} for {name}.",
-                    flush=True,
-                )
-            else:
-                print(
-                    f"[INFO] menu[{index}] has no 항목; "
-                    f"preserving external URL for {name}.",
-                    flush=True,
-                )
+        if not category_visible and name_visible:
+            preserved_names.append(name)
+            print(
+                f"[INFO] menu[{index}] has no 항목; "
+                f"preserving existing cache for {name}.",
+                flush=True,
+            )
 
             continue
 
@@ -266,7 +249,7 @@ def parse_menu(
             )
         )
 
-    return items, clear_rows
+    return items, preserved_names
 
 
 def build_image_processor_url(url: str, lang: str = "ko") -> str:
@@ -279,7 +262,7 @@ def build_image_processor_url(url: str, lang: str = "ko") -> str:
     )
 
 
-def load_menu(config: dict) -> tuple[list[MenuImage], list[dict]]:
+def load_menu(config: dict) -> tuple[list[MenuImage], list[str]]:
     source_config = config.get("source", {})
 
     sheet_config = config.get(

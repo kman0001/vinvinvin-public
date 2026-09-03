@@ -32,6 +32,41 @@ class SyncEngine:
             key
         )
 
+    def get_cached_keys_by_name(
+        self,
+        name
+    ):
+        target_name = str(name or "").strip()
+
+        if not target_name:
+            return set()
+
+        keys = set()
+
+        for key in self.cache.keys():
+
+            item = self.cache.get(
+                key
+            )
+
+            if not isinstance(
+                item,
+                dict
+            ):
+                continue
+
+            cached_name = str(
+                item.get(
+                    "name",
+                    ""
+                )
+            ).strip()
+
+            if cached_name == target_name:
+                keys.add(key)
+
+        return keys
+
     def save_cache(
         self
     ):

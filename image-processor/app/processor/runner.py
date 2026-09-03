@@ -349,7 +349,7 @@ def process_images(
 
     try:
 
-        menu, clear_rows = load_menu(
+        menu, preserved_names = load_menu(
             config
         )
 
@@ -397,6 +397,28 @@ def process_images(
 
     current_keys = set()
     sheet_updates = []
+
+    preserved_cache_keys = set()
+    preserved_cache_names = []
+
+    for name in preserved_names:
+        keys = sync_engine.get_cached_keys_by_name(name)
+
+        if keys:
+            preserved_cache_keys.update(keys)
+            preserved_cache_names.append(name)
+
+    current_keys.update(preserved_cache_keys)
+
+    if preserved_cache_keys:
+
+        print(
+            "[INFO] Preserved "
+            f"{len(preserved_cache_keys)} cached item(s) "
+            "for menu entries with no 항목 -> "
+            f"{', '.join(preserved_cache_names)}.",
+            flush=True
+        )
 
     # ========================================================
     # Pending 상태 출력
@@ -886,8 +908,7 @@ def process_images(
     sheet_update_success = (
         write_sheet_destinations(
             config,
-            sheet_updates,
-            clear_rows
+            sheet_updates
         )
     )
 

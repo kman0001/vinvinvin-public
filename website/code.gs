@@ -306,10 +306,6 @@ function updateMenuImages(payload) {
       ? payload.rows
       : [];
 
-  const clearRows =
-    Array.isArray(payload.clearRows)
-      ? payload.clearRows
-      : [];
 
 
   // ===========================
@@ -611,47 +607,6 @@ function updateMenuImages(payload) {
     }
   );
 
-
-  clearRows.forEach(
-    item => {
-
-      const key =
-        buildMenuRowKey(
-          item.category,
-          item.name
-        );
-
-      const rowIndex =
-        rowByKey[key];
-
-      if (
-        rowIndex === undefined
-      ) {
-        skipped += 1;
-        return;
-      }
-
-      const currentValue =
-        String(
-          dataValues[rowIndex][imageOffset]
-        ).trim();
-
-      if (!hasVisibleText(currentValue)) {
-        skipped += 1;
-        return;
-      }
-
-      dataValues[rowIndex][imageOffset] =
-        "";
-
-      changedRows.add(
-        rowIndex
-      );
-
-      updated += 1;
-
-    }
-  );
 
 
   // ===========================
@@ -1384,9 +1339,6 @@ function getImageProcessorBlankPriceRows(
         ) ||
         !hasVisibleText(
           row[nameOffset]
-        ) ||
-        !hasVisibleText(
-          row[imageOffset]
         )
       ) {
         return;
