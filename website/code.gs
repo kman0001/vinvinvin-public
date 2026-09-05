@@ -8,7 +8,7 @@ const LANG = {
 
 const SHEETS = {
   MENU: "메뉴판",
-  PRICE: "단가표",
+  PRICE: "메뉴판",
   NOTICE: "안내"
 };
 
@@ -25,7 +25,7 @@ const PROP_IMAGE_UPDATE_PREFIX = "image_update_";
 const IMAGE_UPDATE_STATUS_EXPIRATION = 600; // 10분
 
 const IMAGE_ADDRESS_COLUMN = "사진";
-const PRICE_HEADER_SEARCH_ROWS = 10;   // 단가표 헤더 검색 최대 행 수
+const PRICE_HEADER_SEARCH_ROWS = 10;   // PRICE 헤더 검색 최대 행 수
 
 // ===========================
 // 공백 데이터 판정
@@ -210,7 +210,7 @@ function buildMenuRowKey(category, name) {
 }
 
 // ===========================
-// 단가표 헤더 행 찾기
+// PRICE 헤더 행 찾기
 // ===========================
 
 function findPriceHeaderRow(
