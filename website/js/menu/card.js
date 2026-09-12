@@ -21,13 +21,13 @@ function createMetaTags({
     country,
     variety,
     abv,
-    extra,
+    extras,
+    scores,
     category
 }) {
 
     const flag = getFlag(country);
     const typeIcon = getTypeIcon(category);
-    const extraIcon = getExtraIcon(extra);
 
     return `
         <div class="wine-meta">
@@ -44,13 +44,20 @@ function createMetaTags({
                 ? `<span class="tag">☺️ ${abv}</span>`
                 : ""}
 
-            ${extra
-                ? `<span class="tag">${extraIcon} ${extra}</span>`
-                : ""}
+            ${extras
+                .map(extra => {
+                    const extraIcon = getExtraIcon(extra);
+
+                    return `<span class="tag">${extraIcon} ${extra}</span>`;
+                })
+                .join("")}
+
+            ${scores
+                .map(score => `<span class="tag">🏆 ${score}</span>`)
+                .join("")}
 
         </div>
     `;
-
 }
 
 // ===========================
@@ -91,7 +98,17 @@ export function createMenuCard(item, category) {
     const country = info[0] || "";
     const variety = info[1] || "";
     const abv = info[2] || "";
-    const extra = info[3] || "";
+
+    const extras = [];
+    const scores = [];
+
+    info.slice(3).forEach(value => {
+        if (/^[A-Za-z]{2}\d+$/.test(value)) {
+            scores.push(value);
+        } else {
+            extras.push(value);
+        }
+    });
 
     const available = isAvailable(item["품절 여부"]);
     const recommended = isRecommended(item["추천"]);
@@ -126,7 +143,8 @@ export function createMenuCard(item, category) {
                     country,
                     variety,
                     abv,
-                    extra,
+                    extras,
+                    scores,
                     category
                 })}
 

@@ -75,7 +75,7 @@ export function getExtraIcon(value) {
     }
 
     if (/ml/i.test(text)) {
-        return "🥂";
+        return "🧴";
     }
 
     if (/^\d+\s*IBU$/i.test(text)) {
