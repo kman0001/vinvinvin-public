@@ -103,7 +103,7 @@ export function createMenuCard(item, category) {
     const scores = [];
 
     info.slice(3).forEach(value => {
-        if (/^[A-Za-z]{2,}\d+(?:\.\d+)?$/.test(value)) {
+        if (/^[A-Za-z]{2,}\d+(?:\.\d+)?[+-]?$/.test(value)) {
             scores.push(value);
         } else {
             extras.push(value);
