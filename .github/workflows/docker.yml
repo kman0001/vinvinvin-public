@@ -6,11 +6,17 @@ on:
       - main
     paths:
       - 'image-processor/**'
-      
+
   workflow_dispatch:
     inputs:
       no_cache:
         description: 'Disable Docker build cache'
+        required: false
+        default: false
+        type: boolean
+
+      cleanup_dry_run:
+        description: 'GHCR cleanup without deleting versions (Dry Run)'
         required: false
         default: false
         type: boolean
@@ -49,9 +55,183 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
           tags: |
-            ${{ github.ref == 'refs/heads/main' && format('ghcr.io/{0}:latest', github.repository) }}
+            ghcr.io/${{ github.repository }}:latest
 
           no-cache: ${{ inputs.no_cache || false }}
 
           cache-from: type=gha,scope=image-processor
           cache-to: type=gha,mode=max,scope=image-processor
+
+      - name: Cleanup old GHCR versions
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CLEANUP_DRY_RUN: ${{ inputs.cleanup_dry_run || false }}
+        run: |
+          set -euo pipefail
+
+          PACKAGE_NAME="${GITHUB_REPOSITORY#*/}"
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+
+          API_PATH="/users/${OWNER}/packages/container/${PACKAGE_NAME}/versions"
+
+          echo "Checking GHCR package: ${OWNER}/${PACKAGE_NAME}"
+
+          # ------------------------------------------------------------
+          # Get all GHCR versions.
+          # --paginate --slurp returns an array of page arrays,
+          # so flatten it before processing.
+          # ------------------------------------------------------------
+          if ! gh api \
+            --paginate \
+            --slurp \
+            -H "Accept: application/vnd.github+json" \
+            "${API_PATH}?per_page=100" > /tmp/ghcr_versions_raw.json; then
+            echo "::warning::Failed to retrieve GHCR versions. Skipping cleanup."
+            exit 1
+          fi
+
+          if ! jq -e 'add | type == "array"' \
+            /tmp/ghcr_versions_raw.json > /tmp/ghcr_versions.json; then
+            echo "::warning::Failed to parse GHCR versions. Skipping cleanup."
+            exit 1
+          fi
+
+          VERSION_COUNT=$(jq 'length' /tmp/ghcr_versions.json)
+          echo "Found ${VERSION_COUNT} GHCR versions."
+
+          if [[ "${VERSION_COUNT}" -eq 0 ]]; then
+            echo "Nothing to clean up."
+            exit 0
+          fi
+
+          # ------------------------------------------------------------
+          # Group versions into Docker build sets.
+          #
+          # Versions are sorted newest first.
+          # Versions created within 300 seconds of the previous version
+          # belong to the same build set.
+          # ------------------------------------------------------------
+          python3 <<'PY'
+          import json
+          from datetime import datetime, timezone
+
+          with open("/tmp/ghcr_versions.json", "r", encoding="utf-8") as f:
+              versions = json.load(f)
+
+          def parse_time(value):
+              return datetime.fromisoformat(
+                  value.replace("Z", "+00:00")
+              ).astimezone(timezone.utc)
+
+          versions.sort(
+              key=lambda v: parse_time(v["created_at"]),
+              reverse=True,
+          )
+
+          build_sets = []
+          current_set = []
+          previous_time = None
+
+          for version in versions:
+              created = parse_time(version["created_at"])
+
+              if previous_time is None:
+                  current_set = [version]
+              else:
+                  delta = (previous_time - created).total_seconds()
+
+                  if delta <= 300:
+                      current_set.append(version)
+                  else:
+                      build_sets.append(current_set)
+                      current_set = [version]
+
+              previous_time = created
+
+          if current_set:
+              build_sets.append(current_set)
+
+          print(f"Detected {len(build_sets)} build sets.")
+
+          for index, build_set in enumerate(build_sets, start=1):
+              newest = build_set[0]["created_at"]
+              oldest = build_set[-1]["created_at"]
+
+              print(
+                  f"Build set {index}: "
+                  f"{newest} -> {oldest} "
+                  f"({len(build_set)} versions)"
+              )
+
+          # Keep the newest 3 build sets.
+          delete_versions = [
+              version
+              for build_set in build_sets[3:]
+              for version in build_set
+          ]
+
+          with open("/tmp/ghcr_delete_versions.json", "w", encoding="utf-8") as f:
+              json.dump(delete_versions, f)
+
+          print(f"Versions to delete: {len(delete_versions)}")
+          PY
+
+          DELETE_COUNT=$(jq 'length' /tmp/ghcr_delete_versions.json)
+
+          if [[ "${DELETE_COUNT}" -eq 0 ]]; then
+            echo "No old build sets to delete."
+            exit 0
+          fi
+
+          # ------------------------------------------------------------
+          # Dry-run mode
+          # ------------------------------------------------------------
+          if [[ "${CLEANUP_DRY_RUN}" == "true" ]]; then
+            echo ""
+            echo "=== DRY RUN ==="
+            echo "The following versions would be deleted:"
+
+            jq -r '
+              .[] |
+              "ID=\(.id) created_at=\(.created_at) tags=\((.metadata.container.tags // []) | join(","))"
+            ' /tmp/ghcr_delete_versions.json
+
+            echo ""
+            echo "Dry run complete. Nothing was deleted."
+            exit 0
+          fi
+
+          # ------------------------------------------------------------
+          # Delete old versions.
+          #
+          # Continue deleting remaining versions if one deletion fails.
+          # ------------------------------------------------------------
+          echo "Deleting ${DELETE_COUNT} old GHCR versions..."
+
+          FAILED=0
+
+          while IFS= read -r VERSION_ID; do
+            [[ -z "${VERSION_ID}" ]] && continue
+
+            echo "Deleting GHCR version ${VERSION_ID}..."
+
+            DELETE_PATH="/users/${OWNER}/packages/container/${PACKAGE_NAME}/versions/${VERSION_ID}"
+
+            if ! gh api \
+              --method DELETE \
+              -H "Accept: application/vnd.github+json" \
+              "${DELETE_PATH}"; then
+              echo "::warning::Failed to delete GHCR version ${VERSION_ID}"
+              FAILED=1
+            fi
+          done < <(
+            jq -r '.[].id' /tmp/ghcr_delete_versions.json
+          )
+
+          if [[ "${FAILED}" -ne 0 ]]; then
+            echo "::warning::Some GHCR versions could not be deleted."
+          else
+            echo "GHCR cleanup completed successfully."
+          fi
