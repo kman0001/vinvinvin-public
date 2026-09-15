@@ -92,12 +92,18 @@ jobs:
             exit 1
           fi
 
-          if ! jq -e 'add | type == "array"' \
+          if ! jq 'add' \
             /tmp/ghcr_versions_raw.json > /tmp/ghcr_versions.json; then
-            echo "::warning::Failed to parse GHCR versions. Skipping cleanup."
+            echo "::warning::Failed to flatten GHCR versions. Skipping cleanup."
             exit 1
           fi
-
+          
+          if ! jq -e 'type == "array"' \
+            /tmp/ghcr_versions.json > /dev/null; then
+            echo "::warning::GHCR versions data is not an array. Skipping cleanup."
+            exit 1
+          fi
+          
           VERSION_COUNT=$(jq 'length' /tmp/ghcr_versions.json)
           echo "Found ${VERSION_COUNT} GHCR versions."
 
