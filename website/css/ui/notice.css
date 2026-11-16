@@ -32,6 +32,7 @@
     margin:8px 0;
     line-height:1.7;
     color:#444;
+    white-space:pre-line;
 }
 
 .notice-warning{

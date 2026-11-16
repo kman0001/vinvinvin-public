@@ -98,6 +98,14 @@ main{
     vertical-align:middle;
 }
 
+.badge-event{
+    background:#C58A32;
+}
+
+.badge-discount{
+    background:#39756C;
+}
+
 /* ===========================
    Tags
 =========================== */
@@ -141,7 +149,8 @@ main{
     margin-bottom:20px;
 }
 
-.web-desc .bold-quotes{
+.web-desc .bold-quotes,
+.notice-list .bold-quotes{
     font-family:'Maru Buri',serif;
     font-weight:700;
     font-size:1.1em;
@@ -161,6 +170,19 @@ main{
     font-size:32px;
     font-weight:700;
     line-height:1;
+}
+
+.normal-price{
+    color:#888;
+    font-size:20px;
+    font-weight:400;
+    text-decoration:line-through;
+    margin-right:10px;
+}
+
+.discount-price{
+    color:#7d0000;
+    font-weight:700;
 }
 
 /* ===========================

@@ -47,6 +47,19 @@ export function isRecommended(value) {
 
 }
 
+export function isEvent(value) {
+
+    return String(value).trim().toUpperCase() === "이벤트";
+
+}
+
+export function formatQuotedText(value) {
+
+    return String(value || "")
+        .replace(/"([^"]*)"/g, '<span class="bold-quotes">"$1"</span>');
+
+}
+
 // ===========================
 // Price
 // ===========================
@@ -60,6 +73,23 @@ export function toPrice(value) {
 export function formatPrice(value) {
 
     return `₩${toPrice(value).toLocaleString("ko-KR")}`;
+
+}
+
+export function formatDiscountPrice(normalPrice, discountPrice) {
+
+    const normal = toPrice(normalPrice);
+    const discounted = toPrice(discountPrice);
+
+    if (normal > 0 && discounted > 0) {
+        return `
+            <span class="normal-price">${formatPrice(normal)}</span>
+            <span class="discount-price">${formatPrice(discounted)}</span>
+            <span class="badge badge-discount">할인</span>
+        `;
+    }
+
+    return formatPrice(normalPrice);
 
 }
 

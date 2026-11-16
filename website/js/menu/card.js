@@ -8,8 +8,9 @@ import {
     getImageSrc,
     isAvailable,
     isRecommended,
-    toPrice,
-    formatPrice,
+    isEvent,
+    formatDiscountPrice,
+    formatQuotedText,
     getExtraIcon
 } from "../utils/utils.js";
 
@@ -64,13 +65,13 @@ function createMetaTags({
 // Price
 // ===========================
 
-function createPrice(price, available) {
+function createPrice(price, discountPrice, available) {
 
     return `
         <div class="price">
             ${
                 available
-                    ? formatPrice(price)
+                    ? formatDiscountPrice(price, discountPrice)
                     : `<span class="soldout">SOLD OUT</span>`
             }
         </div>
@@ -112,8 +113,10 @@ export function createMenuCard(item, category) {
 
     const available = isAvailable(item["품절 여부"]);
     const recommended = isRecommended(item["추천"]);
+    const event = isEvent(item["이벤트"]);
 
-    const price = toPrice(item["가격"]);
+    const price = item["가격"];
+    const discountPrice = item["할인가"];
 
     card.innerHTML = `
         <div class="card-layout">
@@ -135,6 +138,11 @@ export function createMenuCard(item, category) {
                     ${
                         recommended
                             ? `<span class="badge">추천</span>`
+                            : ""
+                    }
+                    ${
+                        event
+                            ? `<span class="badge badge-event">이벤트</span>`
                             : ""
                     }
                 </div>
@@ -161,13 +169,12 @@ export function createMenuCard(item, category) {
                 ${
                     item["설명"]
                         ? `<div class="web-desc">${
-                            // 정규표현식으로 큰따옴표("") 안의 내용을 span 태그로 감쌉니다.
-                            item["설명"].replace(/"([^"]*)"/g, '<span class="bold-quotes">"$1"</span>')
+                            formatQuotedText(item["설명"])
                           }</div>`
                         : ""
                 }
 
-                ${createPrice(price, available)}
+                ${createPrice(price, discountPrice, available)}
 
             </div>
 

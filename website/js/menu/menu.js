@@ -8,7 +8,6 @@ import {
 } from "./navigation.js";
 
 import {
-    isAvailable,
     toPrice
 } from "../utils/utils.js";
 
@@ -43,26 +42,13 @@ function groupByCategory(data) {
 function sortCategory(items) {
 
     // ===========================
-    // 1. 판매중 / 품절 분리
+    // 1. 정렬번호 유무에 따라 분리
     // ===========================
 
-    const available = [];
-    const soldOut = [];
-
-    items.forEach((item, originalIndex) => {
-
-        const entry = {
-            item,
-            originalIndex
-        };
-
-        if (isAvailable(item["품절 여부"])) {
-            available.push(entry);
-        } else {
-            soldOut.push(entry);
-        }
-
-    });
+    const entries = items.map((item, originalIndex) => ({
+        item,
+        originalIndex
+    }));
 
     // ===========================
     // 2. 정렬번호 유무에 따라 분리
@@ -71,7 +57,7 @@ function sortCategory(items) {
     const positioned = [];
     const unsorted = [];
 
-    available.forEach(entry => {
+    entries.forEach(entry => {
 
         const sort = Number(entry.item["정렬"]);
 
@@ -124,16 +110,16 @@ function sortCategory(items) {
     });
 
     // ===========================
-    // 5. 판매중 메뉴 슬롯
+    // 5. 메뉴 슬롯
     // ===========================
 
-    const result = new Array(available.length);
+    const result = new Array(entries.length);
     const overflow = [];
 
     // ===========================
     // 6. 정렬번호 메뉴 배치
     //
-    // 정렬번호 = 판매중 메뉴 기준 위치
+    // 정렬번호 = 메뉴 기준 위치
     //
     // 범위를 벗어나면 overflow 처리
     // ===========================
@@ -217,38 +203,18 @@ function sortCategory(items) {
     });
 
     // ===========================
-    // 10. 품절 메뉴
+    // 10. 최종 결과
     //
     // 가격순
     // 동일 가격 → 시트 순서
     //
-    // 정렬번호와 관계없이 항상 마지막
-    // ===========================
-
-    soldOut.sort((a, b) => {
-
-        const priceA = toPrice(a.item["가격"]);
-        const priceB = toPrice(b.item["가격"]);
-
-        if (priceA !== priceB) {
-            return priceA - priceB;
-        }
-
-        return a.originalIndex - b.originalIndex;
-
-    });
-
-    // ===========================
-    // 11. 최종
-    //
-    // 판매중 → 품절
+    // 품절 여부와 관계없이 기존 정렬 위치를 유지
     // ===========================
 
     items.splice(
         0,
         items.length,
-        ...result.filter(item => item !== undefined),
-        ...soldOut.map(entry => entry.item)
+        ...result.filter(item => item !== undefined)
     );
 }
 

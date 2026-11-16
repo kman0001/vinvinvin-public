@@ -9,13 +9,13 @@ const NOTICE_SECTIONS = [
         icon: "•"
     },
     {
-        type: "주의",
-        title: "⚠️ 주의",
+        type: "이벤트",
+        title: "🎉 이벤트",
         icon: "•"
     },
     {
-        type: "이벤트",
-        title: "🎉 이벤트",
+        type: "주의",
+        title: "⚠️ 주의",
         icon: "•"
     },
     {
@@ -28,6 +28,8 @@ const NOTICE_SECTIONS = [
 // ===========================
 // Notice
 // ===========================
+
+import { formatQuotedText } from "../utils/utils.js";
 
 export function showNotice(data) {
 
@@ -76,7 +78,7 @@ export function showNotice(data) {
         sectionItems.forEach(item => {
 
             html += `
-                <li>${section.icon} ${item["내용"]}</li>
+                <li>${section.icon} ${formatQuotedText(item["내용"])}</li>
             `;
 
         });
